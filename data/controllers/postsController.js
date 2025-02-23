@@ -1,32 +1,42 @@
 const posts = require("../data/postsData");
+const db = require("../../dataBase");
 
 //index
-function index(req, res) {
-  let postFilterd = posts;
-  const { tags } = req.query;
-
-  if (tags) {
-    postFilterd = postFilterd.filter((post) =>
-      post.tags.includes(req.query.tags)
-    );
+async function index(req, res) {
+  try {
+    const [posts] = await db.query("SELECT * FROM posts");
+    res.json(posts);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
-
-  res.json(postFilterd);
 }
 
 //show
-function show(req, res) {
-  const id = parseInt(req.params.id);
-  const post = posts.find((post) => post.id === id);
-  if (!post) {
-    res.status(404);
+async function show(req, res) {
+  try {
+    const [posts] = await db.query("SELECT * FROM posts WHERE id = ?", [
+      req.params.id,
+    ]);
+    if (posts.length === 0) {
+      return res.status(404).json({ error: "Post non trovato" });
+    }
 
-    return res.json({
-      error: "Not Found",
-      message: "Post Non Trovato",
-    });
+    const [tags] = await db.query(
+      `
+      SELECT tags.*
+      FROM tags 
+      JOIN post_tag ON tags.id = post_tag.tag_id
+      WHERE post_tag.post_id = ?`,
+      [req.params.id]
+    );
+    const post = {
+      ...posts[0],
+      tags: tags,
+    };
+    res.json(post);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
-  res.json(post);
 }
 
 //store
@@ -102,21 +112,19 @@ function modify(req, res) {
 }
 
 //destroy
-function destroy(req, res) {
-  const id = parseInt(req.params.id);
-  const post = posts.find((post) => post.id === id);
-  if (!post) {
-    res.status(404);
+async function destroy(req, res) {
+  try {
+    const [result] = await db.query(" DELETE FROM posts WHERE id = ?", [
+      req.params.id,
+    ]);
 
-    return res.json({
-      error: "Not Found",
-      message: "Post Non Trovato",
-    });
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: "Post non trovato" });
+    }
+    res.status(204).send();
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
-
-  posts.splice(posts.indexOf(post), 1);
-
-  res.sendStatus(204);
 }
 
 module.exports = { index, show, store, update, modify, destroy };
